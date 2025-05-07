@@ -44,9 +44,9 @@ if uploaded_file is not None:
     with col2:
         selected_col = st.selectbox("Select a Column to Visualize", df.columns)
         if df[selected_col].dtype == 'object':
-            fig2 = px.bar(df[selected_col].value_counts().reset_index(),
-                          x='index', y=selected_col,
-                          labels={'index': selected_col, selected_col: 'Count'})
+            value_counts_df = df[selected_col].value_counts().reset_index()
+            value_counts_df.columns = [selected_col, 'Count']
+            fig2 = px.bar(value_counts_df, x=selected_col, y='Count', labels={selected_col: selected_col, 'Count': 'Frequency'})
             st.plotly_chart(fig2)
         else:
             fig3 = px.histogram(df, x=selected_col)
