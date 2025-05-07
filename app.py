@@ -14,7 +14,7 @@ st.set_page_config(page_title="Auto Churn Prediction", layout="wide")
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("customer_churn.csv")
+    return pd.read_csv("sample_dataset.csv")
 
 raw_data = load_data()
 data = preprocess_data(raw_data.copy())
