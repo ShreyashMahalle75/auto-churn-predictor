@@ -1,85 +1,98 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
 import plotly.express as px
-from preprocess import preprocess_data
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.preprocessing import LabelEncoder
 
 st.set_page_config(page_title="Auto Churn Prediction", layout="wide")
+st.title("📊 Auto Churn Prediction")
+st.write("Upload a customer churn dataset and predict whether a customer will churn or not.")
 
-@st.cache_data
-def load_data():
-    return pd.read_csv("sample_dataset.csv")
+uploaded_file = st.file_uploader("Upload CSV", type="csv")
 
-raw_data = load_data()
-st.title("📊 Auto Churn Prediction App")
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
 
-# 1. Churn Distribution Pie Chart
-st.subheader("1️⃣ Churn Distribution")
-fig_pie = px.pie(raw_data, names='Churn', title='Churned vs Not Churned', color='Churn')
-st.plotly_chart(fig_pie)
+    st.subheader("📄 Data Preview")
+    st.dataframe(df.head())
 
-# 2. Feature Distribution
-st.subheader("2️⃣ Feature Distribution")
-selected_feature = st.selectbox("Choose a feature to visualize", raw_data.columns[:-1])
+    if 'TotalCharges' in df.columns:
+        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
 
-if raw_data[selected_feature].dtype == 'object':
-    value_counts_df = raw_data[selected_feature].value_counts().reset_index()
-    value_counts_df.columns = [selected_feature, 'Count']
-    fig_bar = px.bar(value_counts_df, x=selected_feature, y='Count')
-    st.plotly_chart(fig_bar)
-else:
-    fig_hist = px.histogram(raw_data, x=selected_feature)
-    st.plotly_chart(fig_hist)
+    df.dropna(inplace=True)
 
-# 3. Train Model
-st.subheader("3️⃣ Train Churn Prediction Model")
-processed_data = preprocess_data(raw_data)
+    # Encode categorical variables
+    df_encoded = df.copy()
+    for col in df_encoded.select_dtypes(include='object'):
+        if col != 'customerID':
+            le = LabelEncoder()
+            df_encoded[col] = le.fit_transform(df_encoded[col])
 
-X = processed_data.drop("Churn_Yes", axis=1)
-y = processed_data["Churn_Yes"]
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    st.subheader("📊 Visualizations")
 
-model = RandomForestClassifier()
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
+    col1, col2 = st.columns(2)
 
-# 4. Confusion Matrix
-st.subheader("4️⃣ Confusion Matrix")
-cm = confusion_matrix(y_test, y_pred)
-fig_cm, ax = plt.subplots()
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
-ax.set_xlabel("Predicted")
-ax.set_ylabel("Actual")
-st.pyplot(fig_cm)
+    with col1:
+        st.write("Churn Distribution")
+        fig1 = px.pie(df, names="Churn", title="Churn vs Not Churn")
+        st.plotly_chart(fig1)
 
-# 5. Classification Report
-st.subheader("5️⃣ Classification Report")
-st.text(classification_report(y_test, y_pred))
+    with col2:
+        selected_col = st.selectbox("Select a Column to Visualize", df.columns)
+        if df[selected_col].dtype == 'object':
+            fig2 = px.bar(df[selected_col].value_counts().reset_index(),
+                          x='index', y=selected_col,
+                          labels={'index': selected_col, selected_col: 'Count'})
+            st.plotly_chart(fig2)
+        else:
+            fig3 = px.histogram(df, x=selected_col)
+            st.plotly_chart(fig3)
 
-# 6. Predict for New User
-st.subheader("6️⃣ Predict Churn for New Customer")
+    st.subheader("🧠 Churn Prediction Model")
 
-user_input = {}
-for col in raw_data.columns:
-    if col in ['customerID', 'Churn']:
-        continue
-    if raw_data[col].dtype == 'object':
-        user_input[col] = st.selectbox(f"{col}", raw_data[col].unique())
-    else:
-        user_input[col] = st.number_input(f"{col}", float(raw_data[col].min()), float(raw_data[col].max()))
+    X = df_encoded.drop(columns=['customerID', 'Churn'])
+    y = df_encoded['Churn']
 
-user_df = pd.DataFrame([user_input])
-user_df_full = pd.concat([raw_data.drop(['customerID', 'Churn'], axis=1), user_df], axis=0)
-processed_user_data = preprocess_data(
-    pd.concat([raw_data, user_df.assign(customerID='0000', Churn='No')], ignore_index=True)
-)
-user_processed = processed_user_data.iloc[[-1]].drop(columns=['Churn_Yes'])
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = RandomForestClassifier(random_state=42)
+    model.fit(X_train, y_train)
 
-if st.button("Predict Churn"):
-    result = model.predict(user_processed)[0]
-    st.success("✅ Prediction: Churn" if result == 1 else "✅ Prediction: Not Churn")
+    y_pred = model.predict(X_test)
+
+    st.write("📌 Classification Report")
+    st.text(classification_report(y_test, y_pred))
+
+    st.write("📌 Confusion Matrix")
+    cm = confusion_matrix(y_test, y_pred)
+    fig_cm, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+    st.pyplot(fig_cm)
+
+    st.subheader("👤 Predict for a New Customer")
+
+    new_data = {}
+    for col in df.columns:
+        if col in ['customerID', 'Churn']:
+            continue
+        if df[col].dtype == 'object':
+            new_data[col] = st.selectbox(f"{col}", df[col].unique())
+        else:
+            new_data[col] = st.number_input(f"{col}", float(df[col].min()), float(df[col].max()), float(df[col].mean()))
+
+    # Convert input into DataFrame
+    new_df = pd.DataFrame([new_data])
+
+    # Encode input the same way
+    for col in new_df.select_dtypes(include='object'):
+        le = LabelEncoder()
+        le.fit(df[col])
+        new_df[col] = le.transform(new_df[col])
+
+    prediction = model.predict(new_df)[0]
+
+    if st.button("Predict Churn"):
+        st.success("✅ Prediction: Customer will CHURN" if prediction == 1 else "✅ Prediction: Customer will NOT churn")
