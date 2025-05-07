@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 import plotly.express as px
+from preprocess import preprocess_data
 
 st.set_page_config(page_title="Auto Churn Prediction", layout="wide")
 
@@ -15,30 +16,30 @@ st.set_page_config(page_title="Auto Churn Prediction", layout="wide")
 def load_data():
     return pd.read_csv("customer_churn.csv")
 
-data = load_data()
+raw_data = load_data()
+data = preprocess_data(raw_data.copy())
+
 st.title("📊 Auto Churn Prediction App")
 
 st.subheader("1️⃣ Churn Distribution")
-fig_pie = px.pie(data, names='Churn', title='Churned vs Not Churned', color='Churn')
+fig_pie = px.pie(raw_data, names='Churn', title='Churned vs Not Churned', color='Churn')
 st.plotly_chart(fig_pie)
 
 st.subheader("2️⃣ Feature Distribution (Bar/Histogram)")
-selected_feature = st.selectbox("Choose a feature to visualize", data.columns[:-1])
+selected_feature = st.selectbox("Choose a feature to visualize", raw_data.columns[:-1])
 
-if data[selected_feature].dtype == 'object':
-    fig_bar = px.bar(data[selected_feature].value_counts().reset_index(),
+if raw_data[selected_feature].dtype == 'object':
+    fig_bar = px.bar(raw_data[selected_feature].value_counts().reset_index(),
                      x='index', y=selected_feature,
                      labels={'index': selected_feature, selected_feature: 'Count'})
     st.plotly_chart(fig_bar)
 else:
-    fig_hist = px.histogram(data, x=selected_feature)
+    fig_hist = px.histogram(raw_data, x=selected_feature)
     st.plotly_chart(fig_hist)
 
 st.subheader("3️⃣ Train Churn Prediction Model")
-
-data_encoded = pd.get_dummies(data.drop('customerID', axis=1), drop_first=True)
-X = data_encoded.drop("Churn_Yes", axis=1)
-y = data_encoded["Churn_Yes"]
+X = data.drop("Churn", axis=1)
+y = data["Churn"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
